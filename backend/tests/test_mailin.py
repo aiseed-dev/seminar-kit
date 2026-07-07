@@ -63,16 +63,62 @@ def test_first_xlsx_none():
     assert "こんにちは" in mailin.body_text(msg)
 
 
-def test_unknown_sender_without_form_gets_guidance(tmp_path):
-    """(c) 添付なし+未登録 → 定型返信+pending。"""
+def test_unknown_sender_without_form_no_autoreply(tmp_path):
+    """(c) 添付なし+未登録 → 自動返信せず pending(バックスキャッター防止)。"""
     mailer = FakeMailer()
     raw = make_msg(body="申し込みたいです").as_bytes()
     got = mailin.handle(StubSession(), mailer, raw, tmp_path)
     assert got == mailin.PENDING
-    ((to, subject, _, reply_to),) = mailer.sent
-    assert to == "taro@example.jp"
-    assert "様式" in subject
-    assert reply_to == "<test-1@example.jp>"
+    assert mailer.sent == []  # スパムかもしれない相手に返信しない
+
+
+def test_forged_form_gets_fix_request(tmp_path):
+    """(a) 発行キーなしの様式+secret 必須 → 修正依頼+pending。"""
+    import io
+
+    from app.services import forms
+    from openpyxl import load_workbook
+
+    course = Course(
+        id=uuid.uuid4(),
+        title="DX入門セミナー",
+        starts_at=datetime(2026, 9, 1, 13, 30, tzinfo=JST),
+        apply_deadline=datetime(2026, 8, 25, 17, 0, tzinfo=JST),
+        allow_venue=True,
+        allow_online=False,
+        allow_satellite=False,
+    )
+    buf = io.BytesIO()
+    forms.build(course, "moshikomi@example.jp").save(buf)  # キーなし=捏造相当
+    buf.seek(0)
+    wb = load_workbook(buf)
+    for name, value in (
+        ("company_kana", "カナ"),
+        ("company_name", "社名"),
+        ("postal_code", "770"),
+        ("address", "住所"),
+        ("tel", "088"),
+        ("contact_kana", "カナ"),
+        ("contact_name", "名"),
+        ("contact_email", "a@b.jp"),
+        ("att1_name", "山田"),
+        ("att1_kana", "ヤマダ"),
+        ("att1_role", "部"),
+        ("att1_email", "a@b.jp"),
+        ("att1_loc", "会場"),
+    ):
+        ((title, coord),) = wb.defined_names[name].destinations
+        wb[title][coord] = value
+    out = io.BytesIO()
+    wb.save(out)
+
+    mailer = FakeMailer()
+    raw = make_msg(xlsx=out.getvalue()).as_bytes()
+    got = mailin.handle(StubSession(), mailer, raw, tmp_path, secret="real-secret")
+    assert got == mailin.PENDING
+    ((_, subject, body, _),) = mailer.sent
+    assert "確認" in subject
+    assert "発行元" in body
 
 
 def test_broken_form_gets_fix_request(tmp_path):

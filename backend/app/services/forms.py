@@ -4,8 +4,14 @@
 読み取り(parse.py)も同じ定義名を参照する。セル座標はこのモジュールに閉じ、
 他の場所でハードコードしない。
 Excel の定義名にはハイフンが使えないため、定義名のみアンダースコアを使う。
+
+様式は公開サイトに置かない(受領メール・印刷物・ブラウザ記入セッションで
+個別に渡す)。secret を渡すと発行キー(HMAC)を埋め込み、parse が検証する
+——申込者にパスワードを持たせない代わりに、発行済み様式の所持を資格にする。
 """
 
+import hashlib
+import hmac as hmaclib
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -57,6 +63,7 @@ _NOTE_ROW = 20
 NAMES: dict[str, str] = {
     "course_id": "H1",
     "form_ver": "H2",
+    "form_key": "H3",  # 発行キー(HMAC。捏造様式の検出)
     **{name: f"C{row}" for name, (row, _) in _COMPANY_ROWS.items()},
     **{
         f"att{i}_{field}": f"{col}{_ATT_ROWS[i - 1]}"
@@ -103,6 +110,12 @@ def jst(dt: datetime) -> str:
     """JST の日本語表記(様式・静的サイトで共用)。"""
     d = dt.astimezone(JST)
     return f"{d.year}年{d.month}月{d.day}日 {d:%H:%M}"
+
+
+def form_key(course_id, secret: str) -> str:
+    """様式の発行キー(講座ID+様式版に対する HMAC。保存不要で検証できる)。"""
+    msg = f"{course_id}:{FORM_VER}".encode()
+    return hmaclib.new(secret.encode(), msg, hashlib.sha256).hexdigest()[:16]
 
 
 _FILL_INPUT = PatternFill("solid", fgColor="FFFDE7")  # 記入欄(薄い黄色)
@@ -153,8 +166,11 @@ def _draw(ws: Worksheet, course: Course, submit_addr: str) -> None:
     ws.page_setup.fitToWidth = 1
 
 
-def build(course: Course, submit_addr: str) -> Workbook:
-    """講座ごとの申込様式を組み立てる(1枚目=申込書、2枚目=記入例)。"""
+def build(course: Course, submit_addr: str, secret: str = "") -> Workbook:
+    """講座ごとの申込様式を組み立てる(1枚目=申込書、2枚目=記入例)。
+
+    secret を渡すと発行キーを埋め込む(運用では必須。parse が検証する)。
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = SHEET
@@ -163,6 +179,8 @@ def build(course: Course, submit_addr: str) -> Workbook:
     # 機械可読メタ(印刷範囲外の列に置き、非表示にする)
     ws[NAMES["course_id"]] = str(course.id)
     ws[NAMES["form_ver"]] = FORM_VER
+    if secret:
+        ws[NAMES["form_key"]] = form_key(course.id, secret)
     ws.column_dimensions["H"].hidden = True
 
     for name, coord in NAMES.items():
@@ -184,7 +202,7 @@ def build(course: Course, submit_addr: str) -> Workbook:
 
     # 入力セル以外はシート保護
     for name, coord in NAMES.items():
-        if name not in ("course_id", "form_ver"):
+        if name not in ("course_id", "form_ver", "form_key"):
             ws[coord].protection = Protection(locked=False)
     ws.protection.sheet = True
 

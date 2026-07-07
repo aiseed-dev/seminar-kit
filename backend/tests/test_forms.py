@@ -171,6 +171,7 @@ def test_form_is_protected_and_machine_readable():
     # 入力セルは保護解除、メタセルは保護のまま
     assert ws[forms.NAMES["company_name"]].protection.locked is False
     assert ws[forms.NAMES["course_id"]].protection.locked is True
+    assert ws[forms.NAMES["form_key"]].protection.locked is True
     # 参加場所のドロップダウン(入力規則)がある
     assert len(ws.data_validations.dataValidation) == 1
     # 記入例シートが付いている
@@ -181,3 +182,56 @@ def test_all_named_cells_registered():
     wb = build_wb(make_course())
     for name in forms.NAMES:
         assert name in wb.defined_names
+
+
+# ---- 発行キー(パスワードの代わりに、発行済み様式の所持を資格にする) ----
+
+SECRET = "form-secret-for-test"
+
+
+def build_wb_with_key(course, secret=SECRET):
+    buf = io.BytesIO()
+    forms.build(course, SUBMIT, secret=secret).save(buf)
+    buf.seek(0)
+    return load_workbook(buf)
+
+
+def test_form_key_roundtrip():
+    course = make_course()
+    wb = build_wb_with_key(course)
+    fill_company(wb)
+    fill_att(wb, 1)
+    got = parse.parse(dump(wb), secret=SECRET)
+    assert got.course_id == course.id
+
+
+def test_forged_form_rejected():
+    # 発行キーなし(捏造相当)の様式は、検証ありの読み取りで弾く
+    wb = build_wb(make_course())
+    fill_company(wb)
+    fill_att(wb, 1)
+    with pytest.raises(parse.Invalid) as e:
+        parse.parse(dump(wb), secret=SECRET)
+    assert any("発行元" in s for s in e.value.issues)
+
+
+def test_wrong_secret_rejected():
+    wb = build_wb_with_key(make_course(), secret="other-secret")
+    fill_company(wb)
+    fill_att(wb, 1)
+    with pytest.raises(parse.Invalid):
+        parse.parse(dump(wb), secret=SECRET)
+
+
+def test_key_not_checked_when_secret_off():
+    # secret 未設定(開発時)は検証しない
+    wb = build_wb(make_course())
+    fill_company(wb)
+    fill_att(wb, 1)
+    parse.parse(dump(wb))  # 例外なし
+
+
+def test_form_key_is_stable_per_course():
+    course = make_course()
+    assert forms.form_key(course.id, SECRET) == forms.form_key(course.id, SECRET)
+    assert forms.form_key(course.id, SECRET) != forms.form_key(course.id, "x")

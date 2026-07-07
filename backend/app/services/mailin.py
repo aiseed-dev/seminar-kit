@@ -6,12 +6,15 @@ pending=未処理)。pending は事務局アプリの「未処理受信」画面
 機械で裁けないものは必ず pending に落とす(黙って捨てない)。
 
 判別:
-  (a) xlsx 添付あり → 経路2。parse → regist(source='mail')
+  (a) xlsx 添付あり → 経路2。parse(発行キー検証込み)→ regist(source='mail')
   (b) 添付なし+送信者が companies に登録済み → 経路3。本文から
       講座(講座名または申込番号)と「受講者名+参加場所」の行を読む。
       確実に読めるものだけ登録し(source='quick')、読めなければ
       自動返信なしで pending へ(登録済み企業は事務局が電話一本で補完)
-  (c) 添付なし+未登録の送信者 → 定型の案内を返信して pending へ
+  (c) 添付なし+未登録の送信者 → **自動返信せず** pending へ。
+      宛先は非公開のため通常は届かない=届くのはスパムか人づての
+      正規メール。ボットへの逆流(バックスキャッター)を防ぎ、
+      判断は人に任せる
 """
 
 import email
@@ -182,6 +185,7 @@ def handle(
     mailer: mail.Mailer,
     raw: bytes,
     received_dir: str | Path,
+    secret: str = "",
 ) -> str:
     """メール1通を処理し、移動先(DONE / PENDING)を返す。"""
     msg = email.message_from_bytes(raw, policy=email.policy.default)
@@ -193,7 +197,7 @@ def handle(
     xlsx = first_xlsx(msg)
     if xlsx is not None:  # 経路2: 様式添付
         try:
-            form = parse.parse(xlsx)
+            form = parse.parse(xlsx, secret=secret)
             application = regist.regist(session, form, source="mail")
         except (parse.Invalid, regist.Rejected) as e:
             subject, text = mail.fix_request(e.issues)
@@ -207,9 +211,7 @@ def handle(
         return DONE
 
     company = session.scalar(select(Company).where(Company.contact_email == sender))
-    if company is None:  # (c) 未登録+添付なし
-        subject, text = mail.no_form()
-        mailer.send(sender, subject, text, reply_to=msgid)
+    if company is None:  # (c) 未登録+添付なし → 自動返信しない(逆流防止)
         return PENDING
 
     # 経路3: 簡易メール(事前登録済み)
@@ -288,7 +290,9 @@ def poll_once(box, session_factory, mailer: mail.Mailer, received_dir) -> dict:
     for uid, raw in box.fetch_new():
         session: Session = session_factory()
         try:
-            disposition = handle(session, mailer, raw, received_dir)
+            disposition = handle(
+                session, mailer, raw, received_dir, secret=box.cfg.form_secret
+            )
             session.commit()
         except Exception:
             log.exception("申込メールの処理に失敗(uid=%s)。未処理へ移動", uid)

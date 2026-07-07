@@ -2,7 +2,9 @@
 
 courses・categories(モデルのリスト)から出力ディレクトリを組み立てる
 純粋な処理。DB からの読み出しは site/build.py(CLI)や事務局アプリが行う。
-個人情報・meeting_url は出力に一切含めない。テンプレートは site/templates/。
+個人情報・meeting_url・**申込様式 xlsx・申込アドレス**は出力に一切含めない
+(様式と宛先は受領メール・印刷物・電話で個別に渡す。ボット収集対策)。
+テンプレートは site/templates/。
 """
 
 import shutil
@@ -25,7 +27,7 @@ def build_site(
     outdir: str | Path,
     *,
     base_url: str,
-    submit_addr: str,
+    contact_note: str,
     api_base: str = "/api/v1",
 ) -> None:
     """静的サイト一式を outdir に生成する(draft は一切出力しない)。"""
@@ -62,7 +64,7 @@ def build_site(
         path.parent.mkdir(parents=True, exist_ok=True)
         html = env.get_template(template).render(
             base_url=base_url,
-            submit_addr=submit_addr,
+            contact_note=contact_note,
             api_base=api_base,
             cat_name=cat_name,
             **ctx,
@@ -83,8 +85,6 @@ def build_site(
             flyer = "flyer.pdf"
 
         (out / cdir / "qr.png").write_bytes(qr.png(f"{base_url}/courses/{course.id}/"))
-        if course.status == "open":
-            forms.build(course, submit_addr).save(out / cdir / "form.xlsx")
 
         render(
             "course.html",

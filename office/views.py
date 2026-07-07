@@ -17,7 +17,7 @@ import flet as ft
 from app.core.config import Settings
 from app.models import Course, Mail
 from app.models import Staff as StaffRow
-from app.services import ledger, mail, mailin, regist, roster, sitegen
+from app.services import forms, ledger, mail, mailin, regist, roster, sitegen
 from app.services.forms import JST, LOC_JA, jst
 from app.services.parse import Entrant, FormData
 from sqlalchemy.orm import Session
@@ -89,7 +89,7 @@ def regen_site(s: Session, cfg: Settings) -> None:
         queries.categories(s),
         cfg.site_out,
         base_url=cfg.site_base_url,
-        submit_addr=cfg.submit_addr,
+        contact_note=cfg.contact_note,
         api_base=cfg.api_base_url,
     )
 
@@ -340,6 +340,35 @@ def course_form(ctx: Ctx, course_id, on_done) -> ft.Control:
             ft.OutlinedButton("開催済みへ", on_click=lambda _: save("finished")),
         ]
     )
+
+    def export_form(_):
+        """配布用の申込様式(公開しないため、ここから取り出して個別に渡す)。"""
+        try:
+            with ctx.db() as s:
+                row = s.get(Course, course_id)
+                wb = forms.build(row, ctx.cfg.submit_addr, secret=ctx.cfg.form_secret)
+            out = Path(ctx.cfg.output_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            path = out / f"申込様式_{row.title}.xlsx"
+            wb.save(path)
+            snack(ctx.page, f"出力しました: {path}(チラシ・郵送・メール送付用)")
+        except Exception as e:  # noqa: BLE001
+            snack(ctx.page, f"出力できません: {e}")
+
+    export_row = (
+        ft.Row(
+            [
+                ft.OutlinedButton("申込様式を出力(配布用)", on_click=export_form),
+                ft.Text(
+                    "様式は公開されないため、チラシ・郵送・メール送付は"
+                    "ここから取り出して渡す",
+                    size=12,
+                ),
+            ]
+        )
+        if course_id
+        else ft.Row([])
+    )
     return ft.Column(
         [
             ft.Row(
@@ -364,6 +393,7 @@ def course_form(ctx: Ctx, course_id, on_done) -> ft.Control:
             ft.Row([f_meeting, ft.OutlinedButton("自動生成", on_click=gen_url)]),
             ft.Row([ft.FilledButton("保存", on_click=lambda _: save(None))]),
             status_buttons,
+            export_row,
         ],
         scroll=ft.ScrollMode.AUTO,
     )

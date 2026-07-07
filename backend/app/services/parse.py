@@ -71,8 +71,12 @@ def _value(wb: Workbook, name: str) -> str | None:
     return s or None
 
 
-def parse(src: bytes | BinaryIO | Path) -> FormData:
-    """様式 xlsx を読み取る。様式でない・不備のときは Invalid を送出。"""
+def parse(src: bytes | BinaryIO | Path, secret: str = "") -> FormData:
+    """様式 xlsx を読み取る。様式でない・不備のときは Invalid を送出。
+
+    secret を渡すと発行キー(forms.form_key)を検証する。
+    キー不一致=当方が発行した様式ではない(捏造・改変)→ Invalid。
+    """
     if isinstance(src, bytes):
         src = io.BytesIO(src)
     try:
@@ -101,6 +105,14 @@ def parse(src: bytes | BinaryIO | Path) -> FormData:
         raise Invalid(
             ["様式の講座情報が壊れています。講座ページの様式をご利用ください。"]
         ) from None
+
+    if secret and _value(wb, "form_key") != forms.form_key(course_id, secret):
+        raise Invalid(
+            [
+                "申込様式の発行元が確認できませんでした。"
+                "お手数ですが、受領メールまたはチラシ記載の方法でお申し込みください。"
+            ]
+        )
 
     issues: list[str] = []
     company: dict[str, str | None] = {}

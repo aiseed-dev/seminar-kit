@@ -80,6 +80,7 @@ class FakeMailer:
 def client(engine, tmp_path):
     cfg = Settings(
         onlyoffice_jwt_secret=SECRET,
+        form_secret="api-form-secret",  # 発行キー検証を有効にして通す
         api_base_url="http://testserver/api/v1",
         onlyoffice_url="http://docserver.example",
         received_dir=str(tmp_path / "received"),

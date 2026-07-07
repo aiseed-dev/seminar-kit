@@ -4,8 +4,8 @@
 <h1>申込書のブラウザ記入</h1>
 <p class="note">
   何もインストールせずに、この画面で申込書に記入して送信できます。
-  スマートフォンでは表の記入が難しいため、講座ページからの様式ダウンロード
-  (パソコンで記入してメール添付)をおすすめします。
+  スマートフォンでは表の記入が難しいため、パソコンでのご記入か
+  お電話でのお申し込みをおすすめします。
 </p>
 <div id="status">準備しています…</div>
 <div id="editor" style="height: 75vh;"></div>
@@ -30,7 +30,7 @@ const API = "{{ api_base }}";
     }
     sess = data;
   } catch (err) {
-    st.textContent = `編集を開始できません(${err.message})。講座ページの様式ダウンロード申込をご利用ください。`;
+    st.textContent = `編集を開始できません(${err.message})。お手数ですが、お電話またはチラシの申込書でお申し込みください。`;
     return;
   }
   const s = document.createElement("script");
@@ -48,7 +48,7 @@ const API = "{{ api_base }}";
     };
   };
   s.onerror = () => {
-    st.textContent = "編集機能を読み込めません。講座ページの様式ダウンロード申込をご利用ください。";
+    st.textContent = "編集機能を読み込めません。お手数ですが、お電話またはチラシの申込書でお申し込みください。";
   };
   document.head.appendChild(s);
 })();

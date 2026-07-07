@@ -28,7 +28,7 @@ def main() -> None:
         categories,
         args.out,
         base_url=cfg.site_base_url,
-        submit_addr=cfg.submit_addr,
+        contact_note=cfg.contact_note,
         api_base=cfg.api_base_url,
     )
     print(f"生成完了: {args.out}/")

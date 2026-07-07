@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # 採番方式: seq(通し連番)/ fy(年度リセット)/ fy-cat(年度-分類-何回目)。
     # 規模に合わせて選ぶ(services/no.py)
     no_style: str = "seq"
+    # 様式の発行キーの元(HMAC)。運用では必須。空=検証オフ(開発時のみ)
+    form_secret: str = ""
+    # 公開サイトに載せる連絡先(申込アドレスは公開しない)
+    contact_note: str = "お申し込み・お問い合わせ: 事務局(電話 000-000-0000)"
 
     # 送信(段階1: 機関の既存 SMTP リレー。段階2で自営 Stalwart へ)
     smtp_host: str = "localhost"

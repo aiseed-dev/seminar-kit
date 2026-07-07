@@ -50,7 +50,7 @@ def make_session(course_id: uuid.UUID, db: DbDep, cfg: CfgDep):
     key = secrets.token_urlsafe(24)
     d = _sess_dir(cfg)
     d.mkdir(parents=True, exist_ok=True)
-    forms.build(course, cfg.submit_addr).save(d / f"{key}.xlsx")
+    forms.build(course, cfg.submit_addr, secret=cfg.form_secret).save(d / f"{key}.xlsx")
 
     config = {
         "documentType": "cell",
@@ -152,7 +152,7 @@ async def callback(
 
     xlsx = _fetch(data["url"])
     try:
-        form = parse.parse(xlsx)
+        form = parse.parse(xlsx, secret=cfg.form_secret)
         application = regist.regist(db, form, source="web")
         d = Path(cfg.received_dir)
         d.mkdir(parents=True, exist_ok=True)

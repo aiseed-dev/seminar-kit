@@ -31,14 +31,13 @@
 {% if c.status == "open" %}
 <h2>お申し込み</h2>
 <p><a class="btn" href="/apply/?course={{ c.id }}">ブラウザで記入して送信</a></p>
-<p>
-  <a class="btn" href="form.xlsx" download="申込様式_{{ c.title }}.xlsx">申込様式をダウンロード</a><br>
-  様式(Excel)に記入し、メールに添付して {{ submit_addr }} へお送りください。
-  印刷して FAX でもお申し込みいただけます。
+<p class="note">
+  お電話でのお申し込み、チラシの申込書(FAX・郵送)もご利用いただけます。
+  {{ contact_note }}
 </p>
 <p class="note">
-  スマートフォンでは表計算の記入が難しいため、様式をダウンロードして
-  パソコンでのご記入をおすすめします。
+  スマートフォンでは表の記入が難しいため、パソコンでのご記入か
+  お電話をおすすめします。
 </p>
 {% endif %}
 
