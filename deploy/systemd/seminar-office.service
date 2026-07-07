@@ -1,0 +1,14 @@
+[Unit]
+Description=seminar 事務局アプリ(Flet Web。LAN / SSH トンネルのみ)
+After=network.target postgresql.service
+
+[Service]
+User=seminar
+WorkingDirectory=/srv/seminar
+EnvironmentFile=/srv/seminar/.env
+# LAN 内のみ。公開しない(Caddy にも載せない)
+ExecStart=/srv/seminar/.venv/bin/flet run --web --port 8550 office/main.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

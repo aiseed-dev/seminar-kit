@@ -1,0 +1,29 @@
+# seminar 公開入口(Cloudflare 経由のみ。443 の許可は CF IP レンジに限定する)
+# TLS は Cloudflare Origin CA 証明書(Full Strict)
+
+api.example.jp {
+	encode gzip
+
+	# 公開 API(講座情報・QR・ブラウザ記入セッションのみ)
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# OnlyOffice Docs(Document Server。コンテナ。JWT 必須)
+	handle_path /onlyoffice/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# チラシ PDF
+	handle_path /flyers/* {
+		root * /srv/seminar/flyers
+		file_server
+	}
+
+	# PocketBase(スタッフ認証。事務局アプリからのみ使う想定)
+	handle /auth/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+}
+
+# 事務局アプリ(8550)は公開しない——LAN / SSH トンネルで使う

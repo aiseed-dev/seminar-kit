@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}ブラウザで記入して送信{% endblock %}
+{% block main %}
+<h1>申込書のブラウザ記入</h1>
+<p class="note">
+  何もインストールせずに、この画面で申込書に記入して送信できます。
+  スマートフォンでは表の記入が難しいため、講座ページからの様式ダウンロード
+  (パソコンで記入してメール添付)をおすすめします。
+</p>
+<div id="status">準備しています…</div>
+<div id="editor" style="height: 75vh;"></div>
+<p><button class="btn" id="send" hidden>送信(保存して終了)</button></p>
+<script>
+const API = "{{ api_base }}";
+(async () => {
+  const st = document.getElementById("status");
+  const btn = document.getElementById("send");
+  const courseId = new URLSearchParams(location.search).get("course");
+  if (!courseId) {
+    st.textContent = "講座が指定されていません。講座ページの「ブラウザで記入して送信」からお越しください。";
+    return;
+  }
+  let sess;
+  try {
+    const res = await fetch(`${API}/docs/session/${courseId}`);
+    let data = null;
+    try { data = await res.json(); } catch { /* JSON 以外の応答 */ }
+    if (!res.ok || !data) {
+      throw new Error(data && data.detail ? data.detail : "接続できません");
+    }
+    sess = data;
+  } catch (err) {
+    st.textContent = `編集を開始できません(${err.message})。講座ページの様式ダウンロード申込をご利用ください。`;
+    return;
+  }
+  const s = document.createElement("script");
+  s.src = `${sess.docserver}/web-apps/apps/api/documents/api.js`;
+  s.onload = () => {
+    const editor = new DocsAPI.DocEditor("editor", sess.config);
+    st.textContent = "記入が済んだら「送信(保存して終了)」を押してください。";
+    btn.hidden = false;
+    btn.onclick = () => {
+      editor.destroyEditor();
+      document.getElementById("editor").innerHTML = "";
+      btn.hidden = true;
+      st.textContent = "送信しました。受領メール(申込番号つき)をお確かめください。" +
+        "しばらく届かない場合は、お手数ですが事務局までご連絡ください。";
+    };
+  };
+  s.onerror = () => {
+    st.textContent = "編集機能を読み込めません。講座ページの様式ダウンロード申込をご利用ください。";
+  };
+  document.head.appendChild(s);
+})();
+</script>
+{% endblock %}

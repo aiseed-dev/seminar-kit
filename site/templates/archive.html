@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}開催済みの講座{% endblock %}
+{% block main %}
+<h1>開催済みの講座</h1>
+<ul class="courses">
+{% for c in finished %}
+  <li>
+    <a href="/courses/{{ c.id }}/">{{ c.title }}</a>
+    <div class="meta">{{ c.starts_at|jst }} / {{ cat_name.get(c.category_id, "") }}</div>
+  </li>
+{% else %}
+  <li>まだありません。</li>
+{% endfor %}
+</ul>
+{% endblock %}

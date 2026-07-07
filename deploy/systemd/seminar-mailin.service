@@ -1,0 +1,14 @@
+[Unit]
+Description=seminar 申込受信箱の監視(IMAP ポーリング)
+After=network.target postgresql.service
+
+[Service]
+User=seminar
+WorkingDirectory=/srv/seminar
+EnvironmentFile=/srv/seminar/.env
+ExecStart=/srv/seminar/.venv/bin/python -m app.services.mailin
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

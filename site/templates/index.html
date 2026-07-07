@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}講座一覧{% endblock %}
+{% block main %}
+<h1>研修・セミナー</h1>
+{% for cat, courses in groups %}
+<section>
+  <h2>{{ cat.name }}</h2>
+  <ul class="courses">
+  {% for c in courses %}
+    <li>
+      <a href="/courses/{{ c.id }}/">{{ c.title }}</a>
+      <span class="badge {{ c.status }}">{{ "募集中" if c.status == "open" else "締切" }}</span>
+      <div class="meta">{{ c.starts_at|jst }}{% if c.summary %} — {{ c.summary }}{% endif %}</div>
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% else %}
+<p>現在、募集中の講座はありません。</p>
+{% endfor %}
+{% endblock %}

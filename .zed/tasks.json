@@ -1,0 +1,37 @@
+[
+  {
+    "label": "pytest",
+    "command": ".venv/bin/pytest",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "ruff check",
+    "command": ".venv/bin/ruff check .",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "ruff format",
+    "command": ".venv/bin/ruff format .",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "api (uvicorn)",
+    "command": ".venv/bin/uvicorn app.main:app --reload --port 8000",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "office (flet web)",
+    "command": ".venv/bin/flet run --web --port 8550 office/main.py",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "site build",
+    "command": ".venv/bin/python site/build.py --out dist",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "mailin once",
+    "command": ".venv/bin/python -m app.services.mailin --once",
+    "cwd": "$ZED_WORKTREE_ROOT"
+  }
+]

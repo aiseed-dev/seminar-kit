@@ -1,0 +1,13 @@
+[Unit]
+Description=seminar 公開API(FastAPI)
+After=network.target postgresql.service
+
+[Service]
+User=seminar
+WorkingDirectory=/srv/seminar
+EnvironmentFile=/srv/seminar/.env
+ExecStart=/srv/seminar/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,73 @@
+/* システムフォントのみ(Web フォントは使わない) */
+body {
+  font-family: system-ui, -apple-system, "Segoe UI",
+    "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", Meiryo, sans-serif;
+  line-height: 1.7;
+  margin: 0;
+  color: #223;
+}
+header {
+  background: #1a4d7a;
+  padding: 0.6rem 1rem;
+}
+header nav a {
+  color: #fff;
+  text-decoration: none;
+  margin-right: 1.2rem;
+  font-weight: 600;
+}
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+footer {
+  border-top: 1px solid #ccd;
+  margin-top: 2rem;
+  padding: 1rem;
+  color: #667;
+  font-size: 0.9rem;
+  text-align: center;
+}
+h1 { font-size: 1.5rem; }
+h2 {
+  font-size: 1.1rem;
+  border-left: 4px solid #1a4d7a;
+  padding-left: 0.5rem;
+  margin-top: 1.6rem;
+}
+ul.courses { list-style: none; padding: 0; }
+ul.courses li { padding: 0.6rem 0; border-bottom: 1px solid #eee; }
+ul.courses .meta { color: #667; font-size: 0.9rem; }
+.badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 3px;
+  color: #fff;
+  background: #999;
+  vertical-align: middle;
+}
+.badge.open { background: #2e7d32; }
+.badge.closed { background: #b26a00; }
+.badge.finished { background: #607d8b; }
+table.outline { border-collapse: collapse; width: 100%; }
+table.outline th, table.outline td {
+  border: 1px solid #ccd;
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+}
+table.outline th { background: #eef3f8; width: 8rem; }
+.desc { white-space: pre-wrap; }
+.btn {
+  display: inline-block;
+  background: #1a4d7a;
+  color: #fff;
+  text-decoration: none;
+  padding: 0.5rem 1.2rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.note { color: #667; font-size: 0.9rem; }
+[hidden] { display: none !important; }
+.qr { margin-top: 2rem; }

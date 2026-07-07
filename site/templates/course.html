@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ c.title }}{% endblock %}
+{% block main %}
+<h1>{{ c.title }}</h1>
+<p>
+  <span class="badge {{ c.status }}">
+    {{ {"open": "募集中", "closed": "締切", "finished": "開催済み"}.get(c.status, "") }}
+  </span>
+</p>
+
+{% if c.description %}<div class="desc">{{ c.description }}</div>{% endif %}
+
+<h2>開催要領</h2>
+<table class="outline">
+  <tr><th>分類</th><td>{{ cat_name.get(c.category_id, "") }}</td></tr>
+  <tr><th>日時</th><td>{{ c.starts_at|jst }}{% if c.ends_at %} 〜 {{ c.ends_at|jst }}{% endif %}</td></tr>
+  {% if c.venue_note %}<tr><th>会場</th><td>{{ c.venue_note }}</td></tr>{% endif %}
+  <tr><th>参加場所</th><td>{{ locs|join(" / ") }}</td></tr>
+  {% if c.capacity_venue %}<tr><th>会場定員</th><td>{{ c.capacity_venue }}名(先着順)</td></tr>{% endif %}
+  <tr><th>受講料</th><td>{{ c.fee_note }}</td></tr>
+  <tr><th>申込期限</th><td>{{ c.apply_deadline|jst }}</td></tr>
+</table>
+
+{% if c.online_note %}
+<h2>受講方法</h2>
+<div class="desc">{{ c.online_note }}</div>
+{% endif %}
+
+{% if flyer %}<p><a href="flyer.pdf">チラシ(PDF)</a></p>{% endif %}
+
+{% if c.status == "open" %}
+<h2>お申し込み</h2>
+<p><a class="btn" href="/apply/?course={{ c.id }}">ブラウザで記入して送信</a></p>
+<p>
+  <a class="btn" href="form.xlsx" download="申込様式_{{ c.title }}.xlsx">申込様式をダウンロード</a><br>
+  様式(Excel)に記入し、メールに添付して {{ submit_addr }} へお送りください。
+  印刷して FAX でもお申し込みいただけます。
+</p>
+<p class="note">
+  スマートフォンでは表計算の記入が難しいため、様式をダウンロードして
+  パソコンでのご記入をおすすめします。
+</p>
+{% endif %}
+
+<div class="qr">
+  <img src="qr.png" alt="このページのQRコード" width="120" height="120">
+  <div class="note">このページのQRコード(チラシ印刷用)</div>
+</div>
+{% endblock %}
