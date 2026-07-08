@@ -17,7 +17,7 @@ import flet as ft
 from app.core.config import Settings
 from app.models import Course, Mail
 from app.models import Staff as StaffRow
-from app.services import forms, ledger, mail, mailin, regist, roster, sitegen
+from app.services import forms, ledger, mail, mailin, parse, regist, roster, sitegen
 from app.services.forms import JST, LOC_JA, jst
 from app.services.parse import Entrant, FormData
 from sqlalchemy.orm import Session
@@ -716,6 +716,34 @@ def build_entry(ctx: Ctx) -> ft.Control:
             }
         )
 
+    # 送信用テキスト(項目: 値)を貼って各欄を前埋めする。転記を省く補助で、
+    # 確定は下の「登録」(=通常の検証を通る)。様式・メールと同じ形式を共用
+    f_paste = ft.TextField(
+        label="送信用テキストを貼り付け(任意)",
+        multiline=True,
+        min_lines=3,
+        width=520,
+    )
+
+    def fill_from_paste(_):
+        vals = parse.read_text_fields(f_paste.value or "")
+        if not vals:
+            snack(ctx.page, "読み取れる項目がありませんでした")
+            return
+        for name, field in f.items():
+            if name in vals:
+                field.value = vals[name]
+        for i, r in enumerate(entrant_rows, start=1):
+            for key in ("name", "kana", "role", "email"):
+                v = vals.get(f"att{i}_{key}")
+                if v:
+                    r[key].value = v
+            loc_label = vals.get(f"att{i}_loc")
+            if loc_label:
+                r["loc"].value = forms.label_to_loc(loc_label)
+        ctx.page.update()
+        snack(ctx.page, "貼り付け内容で前埋めしました(確認して登録してください)")
+
     def submit(_):
         try:
             entrants = tuple(
@@ -761,6 +789,8 @@ def build_entry(ctx: Ctx) -> ft.Control:
         [
             ft.Text("代行入力(FAX・紙・未処理メール)", weight=ft.FontWeight.BOLD),
             guarded(dd),
+            f_paste,
+            ft.Row([ft.OutlinedButton("貼り付けから前埋め", on_click=fill_from_paste)]),
             ft.Row([f["company_kana"], f["company_name"]]),
             ft.Row([f["postal_code"], f["address"]]),
             ft.Row([f["tel"], f["fax"]]),

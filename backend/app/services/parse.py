@@ -181,27 +181,35 @@ def parse(src: bytes | BinaryIO | Path, secret: str = "") -> FormData:
 _LINE_RE = re.compile(r"^\s*([^::]{1,20})[::]\s*(.*?)\s*$")
 
 
-def parse_text(body: str, secret: str = "") -> FormData | None:
-    """メール本文の送信用テキストを読み取る。
+def read_text_fields(body: str) -> dict[str, str]:
+    """送信用テキスト(`項目: 値`)を内部名→値の dict にする(検証なし)。
 
-    「講座ID:」行が無ければ送信用テキストではない → None(呼び出し側は
-    経路3などへ流す)。あれば xlsx と同じ検証を通し、不備は Invalid。
-    行単位の `項目: 値` を寛容に読む(前後の空白・引用符・全角コロン可)。
+    項目名は forms.TEXT_KEYS の日本語ラベルで引き当て、内部名
+    (course_id / company_name / att1_name …)をキーに返す。
+    行単位で寛容に読む(前後の空白・引用符・全角コロン可)。値の中身は
+    検証しない——受信処理(parse_text)と事務局の前埋めの両方で使う。
     """
-    fields: dict[str, str] = {}
+    label_to_name = {label: name for name, label in forms.TEXT_KEYS.items()}
+    out: dict[str, str] = {}
     for line in body.splitlines():
         line = line.lstrip('> "')  # 返信の引用・単一セル貼り付けの引用符に耐える
         m = _LINE_RE.match(line)
         if not m:
             continue
         key, value = m.group(1).strip(), m.group(2).strip()
-        if key and value and key not in fields:
-            fields[key] = value
+        name = label_to_name.get(key)
+        if name and value and name not in out:
+            out[name] = value
+    return out
 
-    if forms.TEXT_KEYS["course_id"] not in fields:
+
+def parse_text(body: str, secret: str = "") -> FormData | None:
+    """メール本文の送信用テキストを読み取る。
+
+    「講座ID:」行が無ければ送信用テキストではない → None(呼び出し側は
+    経路3などへ流す)。あれば xlsx と同じ検証を通し、不備は Invalid。
+    """
+    fields = read_text_fields(body)
+    if "course_id" not in fields:
         return None
-
-    def value_of(name: str) -> str | None:
-        return fields.get(forms.TEXT_KEYS[name]) or None
-
-    return _assemble(value_of, secret)
+    return _assemble(lambda name: fields.get(name) or None, secret)

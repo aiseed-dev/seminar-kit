@@ -280,6 +280,26 @@ def test_parse_text_roundtrip():
     assert (e.name, e.loc) == ("受講 1郎", "venue")
 
 
+def test_read_text_fields_for_prefill():
+    """代行入力の前埋め用: 検証なしで内部名→値を返す(部分でも読める)。"""
+    course = make_course()
+    vals = parse.read_text_fields(text_of(course))
+    assert vals["company_name"] == "株式会社テスト"
+    assert vals["contact_email"] == "taro@test.example.jp"
+    assert vals["att1_name"] == "受講 1郎"
+    assert vals["att1_loc"] == "会場"  # ラベルのまま(コード変換は呼び出し側)
+
+
+def test_read_text_fields_partial_no_course():
+    """講座ID が無い部分的な貼り付けでも、読める項目だけ返す。"""
+    vals = parse.read_text_fields("企業名: 株式会社テスト\n担当者名: 徳島 太郎")
+    assert vals == {"company_name": "株式会社テスト", "contact_name": "徳島 太郎"}
+
+
+def test_read_text_fields_empty():
+    assert parse.read_text_fields("ただの文章です。項目はありません。") == {}
+
+
 def test_parse_text_with_key():
     course = make_course()
     got = parse.parse_text(text_of(course, secret=SECRET), secret=SECRET)
