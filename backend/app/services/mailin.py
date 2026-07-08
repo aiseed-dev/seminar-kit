@@ -7,6 +7,8 @@ pending=未処理)。pending は事務局アプリの「未処理受信」画面
 
 判別:
   (a) xlsx 添付あり → 経路2。parse(発行キー検証込み)→ regist(source='mail')
+  (a') 本文が送信用テキスト(様式のマクロが生成。講座ID・発行キー入り)
+      → 経路2の推奨形。parse_text → regist(source='mail')。添付不要
   (b) 添付なし+送信者が companies に登録済み → 経路3。本文から
       講座(講座名または申込番号)と「受講者名+参加場所」の行を読む。
       確実に読めるものだけ登録し(source='quick')、読めなければ
@@ -210,12 +212,34 @@ def handle(
         mailer.send(sender, subject, text, reply_to=msgid)
         return DONE
 
+    body = body_text(msg)
+
+    # (a') 本文の送信用テキスト(講座ID行があれば様式由来と判断)
+    try:
+        text_form = parse.parse_text(body, secret=secret)
+    except parse.Invalid as e:
+        subject, text = mail.fix_request(e.issues)
+        mailer.send(sender, subject, text, reply_to=msgid)
+        return PENDING
+    if text_form is not None:
+        try:
+            application = regist.regist(session, text_form, source="mail")
+        except regist.Rejected as e:
+            subject, text = mail.fix_request(e.issues)
+            mailer.send(sender, subject, text, reply_to=msgid)
+            return PENDING
+        _save_original(received_dir, application, raw, ".eml")
+        session.flush()
+        course = session.get(Course, text_form.course_id)
+        subject, text = mail.receipt(application, course, text_form.entrants)
+        mailer.send(sender, subject, text, reply_to=msgid)
+        return DONE
+
     company = session.scalar(select(Company).where(Company.contact_email == sender))
     if company is None:  # (c) 未登録+添付なし → 自動返信しない(逆流防止)
         return PENDING
 
     # 経路3: 簡易メール(事前登録済み)
-    body = body_text(msg)
     course = _course_from_body(session, body)
     entrants = extract_entrants(body)
     if course is None or not entrants:

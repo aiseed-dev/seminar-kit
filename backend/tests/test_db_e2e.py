@@ -149,6 +149,50 @@ def test_route3_quick_mail(engine, course_id, tmp_path):
     assert len(mailer.sent) == 1  # 受領メール
 
 
+def test_route2_text_mail(engine, course_id, tmp_path):
+    """(a') 本文の送信用テキスト(マクロ生成形式)でも登録できる。"""
+    mailer = FakeMailer()
+    body = "\n".join(
+        [
+            f"講座ID: {course_id}",
+            "様式版: 1",
+            "企業名フリガナ: カブシキガイシャホンブン",
+            "企業名: 株式会社本文",
+            "郵便番号: 770-0001",
+            "所在地: 徳島市",
+            "電話番号: 088-111-1111",
+            "担当者フリガナ: ホンブン タロウ",
+            "担当者名: 本文 太郎",
+            "メールアドレス: text@e2e.example.jp",
+            "受講者1: 貼付 花子",
+            "受講者1フリガナ: チョウフ ハナコ",
+            "受講者1所属: 企画部",
+            "受講者1メール: hanako@e2e.example.jp",
+            "受講者1参加場所: オンライン",
+        ]
+    )
+    msg = EmailMessage()
+    msg["From"] = "本文 太郎 <text@e2e.example.jp>"
+    msg["To"] = "moshikomi@example.jp"
+    msg["Subject"] = "申込(本文)"
+    msg.set_content(body)
+
+    with Session(engine) as s:
+        got = mailin.handle(s, mailer, msg.as_bytes(), tmp_path)
+        s.commit()
+    assert got == mailin.DONE
+
+    with Session(engine) as s:
+        app_row = s.scalar(
+            select(Application).where(Application.company_name == "株式会社本文")
+        )
+        assert app_row.source == "mail"
+        assert app_row.application_no.endswith("-00003")  # 通し連番の続き
+        assert app_row.received_file.endswith(".eml")
+    ((to, subject, _),) = mailer.sent
+    assert to == "text@e2e.example.jp" and "【受付】" in subject
+
+
 def test_next_no_fy_cat_on_real_db(engine, course_id):
     """fy-cat 方式の LIKE 絞り込みが実 DB で正しく働くこと。
 

@@ -235,3 +235,121 @@ def test_form_key_is_stable_per_course():
     course = make_course()
     assert forms.form_key(course.id, SECRET) == forms.form_key(course.id, SECRET)
     assert forms.form_key(course.id, SECRET) != forms.form_key(course.id, "x")
+
+
+# ---- 送信用テキスト(本文貼り付け。様式内蔵マクロが生成する形式) ----
+
+TEXT_COMPANY = {
+    "企業名フリガナ": "カブシキガイシャテスト",
+    "企業名": "株式会社テスト",
+    "郵便番号": "770-8570",
+    "所在地": "徳島県徳島市万代町1-1",
+    "電話番号": "088-621-2323",
+    "担当者フリガナ": "トクシマ タロウ",
+    "担当者名": "徳島 太郎",
+    "メールアドレス": "taro@test.example.jp",
+}
+
+
+def text_of(course, secret=None, drop=(), extra=()):
+    vals = {
+        "講座ID": str(course.id),
+        "様式版": str(forms.FORM_VER),
+        **TEXT_COMPANY,
+        "受講者1": "受講 1郎",
+        "受講者1フリガナ": "ジュコウ 1ロウ",
+        "受講者1所属": "総務部",
+        "受講者1メール": "user1@test.example.jp",
+        "受講者1参加場所": "会場",
+    }
+    if secret:
+        vals["発行キー"] = forms.form_key(course.id, secret)
+    for k in drop:
+        vals.pop(k)
+    lines = [f"{k}: {v}" for k, v in vals.items()]
+    lines.extend(extra)
+    return "\n".join(lines)
+
+
+def test_parse_text_roundtrip():
+    course = make_course()
+    got = parse.parse_text(text_of(course))
+    assert got.course_id == course.id
+    assert got.company_name == "株式会社テスト"
+    (e,) = got.entrants
+    assert (e.name, e.loc) == ("受講 1郎", "venue")
+
+
+def test_parse_text_with_key():
+    course = make_course()
+    got = parse.parse_text(text_of(course, secret=SECRET), secret=SECRET)
+    assert got.course_id == course.id
+
+
+def test_parse_text_forged_rejected():
+    course = make_course()
+    with pytest.raises(parse.Invalid) as e:
+        parse.parse_text(text_of(course), secret=SECRET)  # キーなし
+    assert any("発行元" in s for s in e.value.issues)
+
+
+def test_parse_text_tolerates_quoting_and_zenkaku():
+    """返信の引用(>)・全角コロン・余計な文にも耐える。"""
+    course = make_course()
+    body = (
+        "お世話になります。\n"
+        + "\n".join(
+            "> " + line.replace(": ", ": ", 1) for line in text_of(course).splitlines()
+        )
+        + "\nよろしくお願いします。"
+    )
+    got = parse.parse_text(body)
+    assert got.company_name == "株式会社テスト"
+
+
+def test_parse_text_not_a_form():
+    assert parse.parse_text("こんにちは。DX入門セミナーに申し込みます。") is None
+
+
+def test_parse_text_missing_required():
+    course = make_course()
+    with pytest.raises(parse.Invalid) as e:
+        parse.parse_text(text_of(course, drop=("企業名",)))
+    assert any("企業・団体名" in s for s in e.value.issues)
+
+
+def test_text_keys_cover_all_names():
+    assert set(forms.TEXT_KEYS) == set(forms.NAMES)
+
+
+def test_macro_js_generated_from_definition():
+    js = forms.macro_js()
+    for name, coord in forms.NAMES.items():
+        assert f'"{coord}"' in js
+        assert f'"{forms.TEXT_KEYS[name]}"' in js
+    assert forms.SHEET in js and forms.TEXT_SHEET in js
+    # 未記入チェックもサーバー側と同じ定義から生成される
+    for name in forms.REQUIRED:
+        assert f'"{forms.LABELS[name]}"' in js
+    assert "未記入" in js
+    assert "受講者が1名も" in js
+
+
+def test_text_sheet_has_formulas():
+    """送信用テキストは数式で自動生成(Excel でも本文貼り付けができる)。"""
+    wb = build_wb(make_course())
+    ws = wb[forms.TEXT_SHEET]
+    for i, name in enumerate(forms.NAMES):
+        formula = ws.cell(row=forms.TEXT_ROW0 + i, column=1).value
+        assert formula.startswith("=IF(")
+        assert forms.TEXT_KEYS[name] in formula
+        assert forms.NAMES[name] in formula  # 参照座標
+
+
+def test_parse_text_single_cell_paste():
+    """マクロの1セル出力を貼ると引用符で囲まれることがある——それにも耐える。"""
+    course = make_course()
+    body = '"' + text_of(course) + '"'
+    got = parse.parse_text(body)
+    assert got.company_name == "株式会社テスト"
+    assert got.entrants[0].loc == "venue"  # 末尾の引用符が付いても読める

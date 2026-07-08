@@ -74,6 +74,35 @@ NAMES: dict[str, str] = {
 
 REQUIRED = [n for n in _COMPANY_ROWS if n != "fax"]  # 企業欄の必須(FAXのみ任意)
 
+# 送信用テキスト(メール本文貼り付け)の項目名 → 定義名。
+# 様式内蔵マクロが生成し、parse.parse_text が同じ表で読む
+TEXT_KEYS: dict[str, str] = {
+    "course_id": "講座ID",
+    "form_ver": "様式版",
+    "form_key": "発行キー",
+    "company_kana": "企業名フリガナ",
+    "company_name": "企業名",
+    "postal_code": "郵便番号",
+    "address": "所在地",
+    "tel": "電話番号",
+    "fax": "FAX",
+    "contact_kana": "担当者フリガナ",
+    "contact_name": "担当者名",
+    "contact_email": "メールアドレス",
+    **{
+        f"att{i}_{field}": f"受講者{i}{suffix}"
+        for i in (1, 2, 3)
+        for field, suffix in (
+            ("name", ""),
+            ("kana", "フリガナ"),
+            ("role", "所属"),
+            ("email", "メール"),
+            ("loc", "参加場所"),
+        )
+    },
+}
+TEXT_SHEET = "送信用テキスト"
+
 # 不備メッセージ用の日本語ラベル
 LABELS: dict[str, str] = {
     **{name: label for name, (_, label) in _COMPANY_ROWS.items()},
@@ -207,7 +236,143 @@ def build(course: Course, submit_addr: str, secret: str = "") -> Workbook:
     ws.protection.sheet = True
 
     _example(wb, course, submit_addr, labels)
+    _text_sheet(wb, submit_addr)
     return wb
+
+
+TEXT_ROW0 = 6  # 送信用テキストの本文が始まる行(A列。数式で自動生成)
+
+
+def _text_sheet(wb: Workbook, submit_addr: str) -> None:
+    """「送信用テキスト」シート。
+
+    A列: 数式で本文を1行1項目で自動生成(Excel・LibreOffice・OnlyOffice の
+    どれでも動く)。行を範囲選択してコピー→メール本文に貼るだけ。
+    C列: 内蔵マクロ(OnlyOffice 専用)が一括コピー用に1セルへまとめる補助。
+    """
+    ws = wb.create_sheet(TEXT_SHEET)
+    ws["A1"] = "送信用テキスト(メール本文に貼り付けて送る)"
+    ws["A1"].font = Font(bold=True)
+    ws["A2"] = (
+        "おすすめ: 無料の OnlyOffice で開き、マクロ「送信用テキスト」を"
+        "実行すると、未記入のチェック付きで C 列に本文がまとまります。"
+        f"コピーして {submit_addr} へメール本文として送信してください。"
+    )
+    ws["A3"] = (
+        "Excel 等では下の A 列に本文が自動で出ます(チェックなし)。"
+        f"{TEXT_ROW0}行目から下を選択してコピーしてください。"
+        "このファイルをそのまま添付して送っていただいても構いません。"
+    )
+    ws[f"A{TEXT_ROW0 - 1}"] = "↓ ここから下をコピー"
+    ws[f"A{TEXT_ROW0 - 1}"].font = Font(bold=True)
+    for i, (name, coord) in enumerate(NAMES.items()):
+        ref = f"'{SHEET}'!{coord}"
+        key = TEXT_KEYS[name]
+        ws.cell(
+            row=TEXT_ROW0 + i,
+            column=1,
+            value=f'=IF({ref}="","","{key}: "&{ref})',
+        )
+    ws.column_dimensions["A"].width = 90
+
+
+def macro_js() -> str:
+    """様式内蔵マクロ(OnlyOffice JavaScript)を様式定義から生成する。
+
+    本文の生成自体は A 列の数式が担う(全表計算ソフト共通)。マクロは
+    OnlyOffice 利用者向けの補助で、C 列の1セルに本文をまとめて
+    一括コピーしやすくする。
+    出力: `python -m app.services.forms > deploy/form-macro.js`
+    座標・項目名は NAMES / TEXT_KEYS が正なので、様式を変えたら再生成する。
+    導入時に OnlyOffice で様式に組み込む(xlsx への自動埋め込みは
+    実機検証後の課題)。保守は North Mini Code の演習題材(docs/05)。
+    """
+    pairs = ",\n    ".join(
+        f'["{TEXT_KEYS[name]}", "{coord}"]' for name, coord in NAMES.items()
+    )
+    # 未記入チェックの定義(サーバー側 parse と同じ REQUIRED / LABELS から生成)
+    required = ",\n    ".join(
+        f'["{LABELS[name]}", "{NAMES[name]}"]' for name in REQUIRED
+    )
+    def att_js(i: int) -> str:
+        fields = ", ".join(
+            f'["{label}", "{NAMES[f"att{i}_{field}"]}"]'
+            for field, (_, label) in ATT_FIELDS.items()
+        )
+        return f"{{ n: {i}, f: [{fields}] }}"
+
+    att_rows = ",\n    ".join(att_js(i) for i in (1, 2, 3))
+    head = (
+        f"// 申込様式マクロ: 未記入チェックのうえ、送信用テキストを"
+        f"「{TEXT_SHEET}」シートに書き出す\n"
+    )
+    return (
+        head
+        + f"""// OnlyOffice(Desktop / Docs)専用。このファイルは自動生成
+// (python -m app.services.forms)——手で直さず、様式(forms.py)を直して再生成する
+// チェック定義はサーバー側の検証(parse)と同じ forms.py から生成される
+(function () {{
+  var src = Api.GetSheet("{SHEET}");
+  var out = Api.GetSheet("{TEXT_SHEET}");
+  function val(coord) {{
+    var v = src.GetRange(coord).GetValue();
+    return v === null ? "" : String(v).trim();
+  }}
+
+  // 1) 未記入チェック(正の検証はサーバー側。ここは送信前の親切)
+  var issues = [];
+  var required = [
+    {required}
+  ];
+  required.forEach(function (kv) {{
+    if (val(kv[1]) === "") issues.push("「" + kv[0] + "」が未記入です");
+  }});
+  var atts = [
+    {att_rows}
+  ];
+  var entrants = 0;
+  atts.forEach(function (a) {{
+    var vals = a.f.map(function (kv) {{ return val(kv[1]); }});
+    var any = vals.some(function (v) {{ return v !== ""; }});
+    if (!any) return;
+    var missing = [];
+    a.f.forEach(function (kv, i) {{ if (vals[i] === "") missing.push(kv[0]); }});
+    if (missing.length) {{
+      issues.push("受講者" + a.n + "人目の「" + missing.join("・") + "」が未記入です");
+    }} else {{
+      entrants++;
+    }}
+  }});
+  if (entrants === 0 && issues.length === 0) {{
+    issues.push("受講者が1名も記入されていません");
+  }}
+  if (issues.length) {{
+    out.GetRange("C{TEXT_ROW0 - 1}")
+      .SetValue("【未記入があります。本文は作成されませんでした】");
+    out.GetRange("C{TEXT_ROW0}").SetValue(issues.join("\\n"));
+    out.SetActive();
+    return;
+  }}
+
+  // 2) 送信用テキストの生成(1セルに一括コピー用)
+  var map = [
+    {pairs}
+  ];
+  var lines = [];
+  map.forEach(function (kv) {{
+    var v = val(kv[1]);
+    if (v !== "") lines.push(kv[0] + ": " + v);
+  }});
+  out.GetRange("C{TEXT_ROW0 - 1}").SetValue("一括コピー用(マクロ出力)");
+  out.GetRange("C{TEXT_ROW0}").SetValue(lines.join("\\n"));
+  out.SetActive();
+}})();
+"""
+    )
+
+
+if __name__ == "__main__":
+    print(macro_js())
 
 
 _SAMPLE_COMPANY = {
