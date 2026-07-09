@@ -30,6 +30,8 @@ def main() -> None:
         base_url=cfg.site_base_url,
         contact_note=cfg.contact_note,
         api_base=cfg.api_base_url,
+        submit_addr=cfg.submit_addr,
+        form_secret=cfg.form_secret,
     )
     print(f"生成完了: {args.out}/")
 

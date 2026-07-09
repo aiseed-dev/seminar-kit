@@ -30,6 +30,13 @@
 
 {% if c.status == "open" %}
 <h2>お申し込み</h2>
+{% if form %}
+<p><a class="btn" href="form.xlsx">申込様式(Excel)をダウンロード</a></p>
+<p class="note">
+  記入後、様式内の案内に沿ってメール本文への貼り付け(または添付)で
+  お送りください。印刷して FAX・郵送でもお申し込みいただけます。
+</p>
+{% endif %}
 <p><a class="btn" href="/apply/?course={{ c.id }}">ブラウザで記入して送信</a></p>
 <p class="note">
   お電話でのお申し込み、チラシの申込書(FAX・郵送)もご利用いただけます。

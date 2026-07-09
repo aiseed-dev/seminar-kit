@@ -41,6 +41,7 @@ ALL = [OPEN, CLOSED, FINISHED, DRAFT]
 
 
 CONTACT = "お申し込み・お問い合わせ: 事務局(電話 088-000-0000)"
+SUBMIT = "moshikomi@example.jp"
 
 
 def build(tmp_path):
@@ -50,6 +51,8 @@ def build(tmp_path):
         tmp_path,
         base_url="https://kensyu.example.jp",
         contact_note=CONTACT,
+        submit_addr=SUBMIT,
+        form_secret="test-secret",
     )
     return tmp_path
 
@@ -81,30 +84,51 @@ def test_draft_not_published(tmp_path):
     assert "下書き講座" not in (out / "index.html").read_text(encoding="utf-8")
 
 
-def test_no_form_xlsx_published(tmp_path):
-    """様式 xlsx は公開サイトに置かない(2026-07-08 決定)。"""
+def test_form_published_for_open_course(tmp_path):
+    """募集中の講座には様式 xlsx を置く(2026-07-09 決定8)。
+
+    様式は発行キー入りの正規品で、講座IDが機械可読に入っている。
+    """
+    from openpyxl import load_workbook
+
     out = build(tmp_path)
-    assert list(out.rglob("*.xlsx")) == []
+    path = out / "courses" / str(OPEN.id) / "form.xlsx"
+    assert path.stat().st_size > 0
+    wb = load_workbook(path)
+    ((title, coord),) = wb.defined_names["course_id"].destinations
+    assert str(wb[title][coord].value) == str(OPEN.id)
+    # 募集中でない講座には置かない
+    assert not (out / "courses" / str(CLOSED.id) / "form.xlsx").exists()
+    assert not (out / "courses" / str(FINISHED.id) / "form.xlsx").exists()
+
+
+def test_form_omitted_without_addr(tmp_path):
+    """submit_addr 未設定なら様式は出力しない(宛先のない様式を配らない)。"""
+    sitegen.build_site(
+        ALL, CATS, tmp_path, base_url="https://x.example.jp", contact_note=CONTACT
+    )
+    assert list(tmp_path.rglob("*.xlsx")) == []
 
 
 def test_nothing_secret_leaks(tmp_path):
-    """meeting_url も申込アドレスも全ページに出ない。"""
+    """meeting_url も申込アドレスも HTML には出ない(宛先は様式の中にだけ)。"""
     out = build(tmp_path)
     for path in out.rglob("*.html"):
         text = path.read_text(encoding="utf-8")
         assert "jitsi.example.jp" not in text, path
         assert "secret-room" not in text, path
-        assert "moshikomi@" not in text, path  # 宛先は非公開
-        assert "ダウンロード" not in text, path  # 様式配布の導線なし
+        assert "moshikomi@" not in text, path  # 宛先はページに書かない
 
 
 def test_course_page_content(tmp_path):
     out = build(tmp_path)
     page = (out / "courses" / str(OPEN.id) / "index.html").read_text(encoding="utf-8")
     assert "募集中" in page
+    assert 'href="form.xlsx"' in page  # 様式のダウンロード導線(決定8)
     assert "ブラウザで記入して送信" in page
     assert CONTACT in page  # 電話・紙の案内(公開用連絡先)
     closed_page = (out / "courses" / str(CLOSED.id) / "index.html").read_text(
         encoding="utf-8"
     )
     assert "ブラウザで記入して送信" not in closed_page  # 締切後は申込導線なし
+    assert "form.xlsx" not in closed_page

@@ -2,8 +2,9 @@
 
 courses・categories(モデルのリスト)から出力ディレクトリを組み立てる
 純粋な処理。DB からの読み出しは site/build.py(CLI)や事務局アプリが行う。
-個人情報・meeting_url・**申込様式 xlsx・申込アドレス**は出力に一切含めない
-(様式と宛先は受領メール・印刷物・電話で個別に渡す。ボット収集対策)。
+募集中の講座には申込様式 xlsx を置く(2026-07-09 決定8。組織としてリスクを
+受容して公開する)。**申込アドレスはページ本文に書かず、様式の中にだけ**
+置く(ボット収集対策)。個人情報・meeting_url は出力に一切含めない。
 テンプレートは site/templates/。
 """
 
@@ -29,6 +30,8 @@ def build_site(
     base_url: str,
     contact_note: str,
     api_base: str = "/api/v1",
+    submit_addr: str = "",
+    form_secret: str = "",
 ) -> None:
     """静的サイト一式を outdir に生成する(draft は一切出力しない)。"""
     out = Path(outdir)
@@ -86,10 +89,19 @@ def build_site(
 
         (out / cdir / "qr.png").write_bytes(qr.png(f"{base_url}/courses/{course.id}/"))
 
+        # 募集中の講座には申込様式を置く(申込アドレスは様式の中にだけ)
+        form = None
+        if course.status == "open" and submit_addr:
+            forms.build(course, submit_addr, secret=form_secret).save(
+                out / cdir / "form.xlsx"
+            )
+            form = "form.xlsx"
+
         render(
             "course.html",
             cdir / "index.html",
             c=course,
             locs=forms.loc_labels(course),
             flyer=flyer,
+            form=form,
         )

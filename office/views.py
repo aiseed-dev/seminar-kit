@@ -91,6 +91,8 @@ def regen_site(s: Session, cfg: Settings) -> None:
         base_url=cfg.site_base_url,
         contact_note=cfg.contact_note,
         api_base=cfg.api_base_url,
+        submit_addr=cfg.submit_addr,
+        form_secret=cfg.form_secret,
     )
 
 
@@ -360,7 +362,7 @@ def course_form(ctx: Ctx, course_id, on_done) -> ft.Control:
             [
                 ft.OutlinedButton("申込様式を出力(配布用)", on_click=export_form),
                 ft.Text(
-                    "様式は公開されないため、チラシ・郵送・メール送付は"
+                    "募集中は講座ページでも配布される。チラシ・郵送用は"
                     "ここから取り出して渡す",
                     size=12,
                 ),
